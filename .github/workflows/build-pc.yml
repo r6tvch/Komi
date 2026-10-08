@@ -1,0 +1,33 @@
+name: Build PC
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Unpack and build
+        env: {CSC_IDENTITY_AUTO_DISCOVERY: 'false'}
+        run: |
+          for z in $(find . -name '*.zip' -not -path './.git/*'); do unzip -o -q "$z" -d "$(dirname "$z")"; done
+          F=$(find . -name package.json -not -path './.git/*' -not -path '*/node_modules/*' | head -1)
+          if [ -z "$F" ]; then echo "package.json не найден - загрузи файлы проекта"; ls -R | head -50; exit 1; fi
+          cd "$(dirname "$F")"
+          echo "Папка проекта: $(pwd)"
+          npm install
+          npx electron-builder --publish never
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp dist/*.exe dist/*.dmg dist/*.AppImage "$GITHUB_WORKSPACE/out/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RogueWest-${{ runner.os }}
+          path: out/*
+          if-no-files-found: error
